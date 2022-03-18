@@ -31,8 +31,6 @@ public class BookFacade extends AbstractFacade<Book> {
         super(Book.class);
     }
 
-    public List<Book> findReadingBook(User authUser) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
+    
     
 }

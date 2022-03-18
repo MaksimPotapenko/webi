@@ -6,12 +6,16 @@
 package servlets;
 
 import entity.Book;
+import entity.BookCover;
+import entity.Cover;
 import entity.Reader;
 import entity.Role;
 import entity.User;
 import entity.UserRoles;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -19,6 +23,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import session.BookCoverFacade;
 import session.BookFacade;
 import session.ReaderFacade;
 import session.RoleFacade;
@@ -40,19 +45,21 @@ import session.UserRolesFacade;
     
 })
 public class LoginServlet extends HttpServlet {
-    @EJB UserFacade userFacade;
-    @EJB ReaderFacade readerFacade;
-    @EJB RoleFacade roleFacade;
-    @EJB UserRolesFacade userRolesFacade;
     @EJB private BookFacade bookFacade;
+    @EJB private UserFacade userFacade;
+    @EJB private ReaderFacade readerFacade;
+    @EJB private RoleFacade roleFacade;
+    @EJB private UserRolesFacade userRolesFacade;
+    @EJB private BookCoverFacade bookCoverFacade;
+
     @Override
     public void init() throws ServletException {
         super.init(); //To change body of generated methods, choose Tools | Templates.
         if(userFacade.count() != 0) return;
         Reader reader = new Reader();
-        reader.setFirstname("Juri");
-        reader.setLastname("Melnikov");
-        reader.setPhone("5654456767");
+        reader.setFirstname("Max");
+        reader.setLastname("Potapenko");
+        reader.setPhone("56625554");
         readerFacade.create(reader);
         User user = new User();
         user.setLogin("admin");
@@ -117,7 +124,7 @@ public class LoginServlet extends HttpServlet {
                 }
                 HttpSession session = request.getSession(true);
                 session.setAttribute("authUser", authUser);
-                request.setAttribute("info", "Здравствуйте "+authUser.getReader().getFirstname());
+                request.setAttribute("info", "Здравствуйте");
                 request.getRequestDispatcher("/listBooks").forward(request, response);
                 break;
             case "/logout":
@@ -131,7 +138,12 @@ public class LoginServlet extends HttpServlet {
                 break;
             case "/listBooks":
                 List<Book> books = bookFacade.findAll();
-                request.setAttribute("books", books);
+                Map<Book,Cover> mapBooks = new HashMap<>();
+                for(Book b : books){
+                    BookCover bookCover = bookCoverFacade.findCoverByBook(b);
+                    mapBooks.put(b, bookCover.getCover());
+                }
+                request.setAttribute("mapBooks", mapBooks);
                 request.getRequestDispatcher("/listBooks.jsp").forward(request, response);
                 break;    
             case "/showRegistration":
@@ -196,6 +208,7 @@ public class LoginServlet extends HttpServlet {
                 request.setAttribute("info", "Добавлен новый пользователь");
                 request.getRequestDispatcher("/listBooks").forward(request, response);
                 break;
+
         }
     }
 

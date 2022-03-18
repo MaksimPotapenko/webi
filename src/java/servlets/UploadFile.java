@@ -5,48 +5,42 @@
  */
 package servlets;
 
-import entity.Book;
-import entity.BookCover;
 import entity.Cover;
-import entity.History;
-import entity.Reader;
 import entity.User;
+import java.io.File;
 import java.io.IOException;
-import java.util.Calendar;
-import java.util.HashMap;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 import javax.ejb.EJB;
 import javax.servlet.ServletException;
+import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import session.BookCoverFacade;
-import session.BookFacade;
-import session.HistoryFacade;
-import session.ReaderFacade;
+import javax.servlet.http.Part;
+import session.CoverFacade;
 import session.UserRolesFacade;
 
 /**
  *
  * @author user
  */
-@WebServlet(name = "ReaderServlet", urlPatterns = {
-    "/showTakeOnBooks",
-    "/takeOnBook",
-    "/showReturnBook",
-    "/returnBook",
-    
-    
+@WebServlet(name = "UploadFile", urlPatterns = {
+    "/showUploadCover",
+    "/uploadCover"
+        
 })
-public class ReaderServlet extends HttpServlet {
-    @EJB private ReaderFacade readerFacade;
-    @EJB private BookFacade bookFacade;
-    @EJB private HistoryFacade historyFacade;
+@MultipartConfig
+public class UploadFile extends HttpServlet {
+
     @EJB private UserRolesFacade userRolesFacade;
-    @EJB private BookCoverFacade bookCoverFacade;
+    @EJB private CoverFacade coverFacade;
     /**
      * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
      * methods.
@@ -70,56 +64,39 @@ public class ReaderServlet extends HttpServlet {
             request.setAttribute("info", "Авторизуйтесь!");
             request.getRequestDispatcher("/showLogin").forward(request, response);
         }
-        if(!userRolesFacade.isRole("READER",authUser)){
+        if(!userRolesFacade.isRole("MANAGER",authUser)){
             request.setAttribute("info", "У вас нет прав!");
             request.getRequestDispatcher("/showLogin").forward(request, response);
         }
-        String path = request.getServletPath();
+        String uploadFolder = "D:\\UploadDir\\SPTV20WebLibrary";
+        String path=request.getServletPath();
         switch (path) {
-            case "/showTakeOnBooks":
-                request.setAttribute("activeShowTakeOnBooks", true);
-                List<Book> books = bookFacade.findAll();
-                Map<Book,Cover> mapBooks = new HashMap<>();
-                for(Book b : books){
-                    BookCover bookCover = bookCoverFacade.findCoverByBook(b);
-                    mapBooks.put(b, bookCover.getCover());
+            case "/showUploadCover":
+                request.getRequestDispatcher("/WEB-INF/uploadFile.jsp").forward(request, response);
+                break;
+            case "/uploadCover":
+                List<Part> fileParts = request.getParts().stream().filter(
+                        part -> "file".equals(part.getName()))
+                    .collect(Collectors.toList());
+                StringBuilder sb = new StringBuilder();
+                for(Part filePart : fileParts){
+                   sb.append(uploadFolder+File.separator + getFileName(filePart));
+                   File file = new File(sb.toString());
+                   file.mkdirs();
+                   try(InputStream fileContent = filePart.getInputStream()){
+                       Files.copy(fileContent, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                   }
                 }
-                request.setAttribute("mapBooks", mapBooks);
-                request.getRequestDispatcher("/WEB-INF/showTakeOnBooks.jsp").forward(request, response);
+                String description = request.getParameter("description");
+                Cover cover = new Cover();
+                cover.setDescription(description);
+                cover.setFileName(sb.toString());
+                coverFacade.create(cover);
+                request.setAttribute("info", "Файл успешно загружен");
+                request.getRequestDispatcher("/addBook").forward(request, response);
                 break;
-            case "/takeOnBook":
-                String bookId = request.getParameter("bookId");
-                Book selectedBook = bookFacade.find(Long.parseLong(bookId));
-                selectedBook.setCount(selectedBook.getCount()-1);
-                bookFacade.edit(selectedBook);
-                History history = new History();
-                history.setBook(selectedBook);
-                Reader reader = readerFacade.find(authUser.getReader().getId());
-                history.setReader(reader);
-                history.setGivenBook(Calendar.getInstance().getTime());
-                historyFacade.create(history);
-                request.setAttribute("info", "Книга выдана");
-                request.getRequestDispatcher("/showTakeOnBooks").forward(request, response);
-                break;
-            case "/showReturnBook":
-                request.setAttribute("activeShowReturnBook", true);
-                List<History> historyWhisReadingBooks = historyFacade.findHistoriesWithReadingBook(authUser.getReader());
-                request.setAttribute("historyWhisReadingBooks", historyWhisReadingBooks);
-                request.getRequestDispatcher("/WEB-INF/showReturnBook.jsp").forward(request, response);
-                break;
-            case "/returnBook":
-                String historyId = request.getParameter("historyId");
-                History selectedHistory = historyFacade.find(Long.parseLong(historyId));
-                Book book = selectedHistory.getBook();
-                book.setCount(book.getCount()+1);
-                bookFacade.edit(book);
-                selectedHistory.setReturnBook(Calendar.getInstance().getTime());
-                historyFacade.edit(selectedHistory);
-                request.setAttribute("info", "Книга возвращена");
-                request.getRequestDispatcher("/showTakeOnBooks").forward(request, response);
-                break;
+           
         }
-        
     }
 
     // <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">
@@ -160,5 +137,18 @@ public class ReaderServlet extends HttpServlet {
     public String getServletInfo() {
         return "Short description";
     }// </editor-fold>
+
+    private String getFileName(Part part) {
+        final String partHeader = part.getHeader("content-disposition");
+        for (String content : part.getHeader("content-disposition").split(";")){
+            if(content.trim().startsWith("filename")){
+                return content
+                        .substring(content.indexOf('=')+1)
+                        .trim()
+                        .replace("\"",""); 
+            }
+        }
+        return null;
+    }
 
 }

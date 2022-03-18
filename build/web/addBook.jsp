@@ -23,6 +23,12 @@
                 </c:forEach>
             </select>
             Год издания <input type="text" name="releaseYear" value="${releaseYear}"><br>
+            Обложка
+            <select name="coverId">
+                <c:forEach var="cover" items="${covers}">
+                    <option value="${cover.id}">${cover.description}</option>
+                </c:forEach>
+            </select>
             Количество экземпляров <input type="text" name="quantity" value="${quantity}"><br>
             <input type="submit" value="Добавить новую книгу">
         </form>
